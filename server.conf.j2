@@ -1,0 +1,35 @@
+server {
+      listen 80;
+      server_name dylan-jenkinson.nz;
+
+      location /nginx_status {
+          stub_status on;
+          access_log on;
+          allow 127.0.0.1;
+          deny all;
+      }
+
+      return 301 https://$server_name$request_uri;
+  }
+
+server {
+    listen       443;
+    server_name dylan-jenkinson.nz;
+
+    ssl     on;
+    ssl_certificate      /etc/letsencrypt/live/dylan-jenkinson.nz/fullchain.pem;
+    ssl_certificate_key  /etc/letsencrypt/live/dylan-jenkinson.nz/privkey.pem;
+    ssl_prefer_server_ciphers On;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_session_cache shared:SSL:10m;
+
+    # These are here as a temp measure to get something working
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    location / {
+            # First attempt to serve request as file, then
+            # as directory, then fall back to displaying a 404.
+            try_files $uri $uri/ =404;
+    }            
+}

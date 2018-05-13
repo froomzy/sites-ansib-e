@@ -1,0 +1,7 @@
+---
+letsencrypt_email: 'dylan@dylan-jenkinson.nz'
+letsencrypt_domain_flags:
+  - "-d dylan-jenkinson.nz"
+  - "-d www.dylan-jenkinson.nz"
+  - "-d api.dylan-jenkinson.nz"
+  - "-d me.dylan-jenkinson.nz"

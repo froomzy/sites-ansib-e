@@ -1,0 +1,108 @@
+---
+- hosts: all
+  become: yes
+  user: root
+  become_user: root
+  vars_files:
+    - secrets.yml
+    - vars.yml
+
+  # Handlers
+  handlers:
+    - name: Restart Nginx
+      service: name=nginx state=restarted enabled=yes
+    - name: Reload Nginx
+      service: name=nginx state=reloaded enabled=yes
+
+  tasks:
+    # Ensure all the things are in place
+    - name: Update Apt Cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+    - name: Clean out Apt Cache
+      apt:      
+        autoclean: yes
+        autoremove: yes
+      
+    
+    # Install required things
+    - name: Install Nginx etc
+      apt: name={{ item }} state=present
+      with_items:
+        - nginx
+        - build-essential
+        - libssl-dev
+        - libffi-dev
+        - python3-dev
+        - git
+        - python3-pip
+        - python3-virtualenv
+        - dialog
+        - libaugeas0
+        - ca-certificates
+    
+    - name: Install Python cryptography module
+      pip: name=cryptography
+
+    - name: Make sure there is a tmp folder
+      command: mkdir /tmp creates=/tmp
+
+    - name: Download certbot
+      get_url: >
+        url=https://dl.eff.org/certbot-auto
+        dest=/tmp/certbot-auto
+    
+    - name: Make certbot executable
+      file:
+        path: /tmp/certbot-auto
+        mode: "o+x"
+
+    - name: chcek if we've generated a cert already
+      stat: path=/etc/letsencrypt/live/dylan-jenkinson.nz/fullchain.pem
+      register: cert_stats
+
+    - name: generate certs (first time)
+      shell: "/tmp/certbot-auto certonly --standalone {{ letsencrypt_domain_flags | join(' ') }} --email {{ letsencrypt_email}} --non-interactive --agree-tos"
+      when: cert_stats.stat.exists == False
+
+    - name: generate certs (subsequent time)
+      shell: "/tmp/certbot-auto certonly --webroot -w /var/www/html {{ letsencrypt_domain_flags | join(' ') }} --email {{ letsencrypt_email}} --non-interactive --agree-tos"
+      when: cert_stats.stat.exists == True
+
+    - name: Ensure the Nginx dir
+      file: path=/etc/nginx state=directory owner=root
+
+    - name: Ensure the Nginx log dir
+      file: path=/var/log/nginx state=directory owner=nobody group=nogroup
+
+    - name: Ensure the default site is removed
+      file: path=/etc/nginx/sites-{{ item }}/default state=absent
+      with_items:
+        - enabled
+        - available
+      notify:
+        - Restart Nginx
+
+    # Configure Nginx
+    - name: Install nginx.conf
+      template: src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+      notify:
+        - Reload Nginx
+    - name: Install Server Block
+      template: src=server.conf.j2 dest=/etc/nginx/sites-available/basic-site.conf
+      notify:
+        - Reload Nginx
+    - name: Link server to enabled sites
+      file:
+        src: /etc/nginx/sites-available/basic-site.conf
+        dest: /etc/nginx/sites-enabled/basic-site.conf
+        state: link
+      notify:
+        - Reload Nginx
+    
+    - name: Start Nginx etc
+      service: name={{ item }} state=started enabled=yes
+      with_items:
+        nginx
+    - meta: flush_handlers
